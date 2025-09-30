@@ -1,0 +1,415 @@
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Scanner;
+
+class Utils {
+    public static final DateTimeFormatter DTF = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
+    private static final Scanner scanner = new Scanner(System.in);
+
+    public static String readLine(String prompt) {
+        System.out.print(prompt);
+        return scanner.nextLine().trim();
+    }
+
+    public static int readInt(String prompt) {
+        while (true) {
+            try {
+                String s = readLine(prompt);
+                return Integer.parseInt(s);
+            } catch (Exception e) {
+                System.out.println("Entrada inválida. Tente novamente.");
+            }
+        }
+    }
+
+    public static LocalDateTime readDateTime(String prompt) {
+        while (true) {
+            try {
+                String s = readLine(prompt + " (formato yyyy-MM-dd'T'HH:mm, ex: 2025-09-30T20:30): ");
+                return LocalDateTime.parse(s, DTF);
+            } catch (Exception e) {
+                System.out.println("Formato de data/hora inválido. Use yyyy-MM-dd'T'HH:mm");
+            }
+        }
+    }
+}
+
+// ---------- EventCategory.java ----------
+enum EventCategory {
+    FESTA,
+    ESPORTE,
+    SHOW,
+    CONFERENCIA,
+    OUTROS;
+
+    public static void printCategories() {
+        int i = 1;
+        for (EventCategory c : EventCategory.values()) {
+            System.out.println(i + ") " + c);
+            i++;
+        }
+    }
+
+    public static EventCategory fromInt(int i) {
+        if (i < 1 || i > EventCategory.values().length) return OUTROS;
+        return EventCategory.values()[i - 1];
+    }
+}
+
+// ---------- User.java ----------
+import java.util.Objects;
+
+class User {
+    private String name;
+    private String email;
+    private String phone;
+
+    public User(String name, String email, String phone) {
+        this.name = name;
+        this.email = email;
+        this.phone = phone;
+    }
+
+    public String getName() { return name; }
+    public String getEmail() { return email; }
+    public String getPhone() { return phone; }
+
+    @Override
+    public String toString() {
+        return name + " <" + email + "> (" + phone + ")";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof User)) return false;
+        User user = (User) o;
+        return Objects.equals(email, user.email);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(email);
+    }
+}
+
+// ---------- Event.java ----------
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
+class Event {
+    private static long COUNTER = 1;
+    private long id;
+    private String name;
+    private String address;
+    private EventCategory category;
+    private LocalDateTime dateTime;
+    private String description;
+    private List<String> participantsEmails = new ArrayList<>();
+
+    public Event(String name, String address, EventCategory category, LocalDateTime dateTime, String description) {
+        this.id = COUNTER++;
+        this.name = name;
+        this.address = address;
+        this.category = category;
+        this.dateTime = dateTime;
+        this.description = description;
+    }
+
+    // Constructor for loading with explicit id
+    public Event(long id, String name, String address, EventCategory category, LocalDateTime dateTime, String description) {
+        this.id = id;
+        this.name = name;
+        this.address = address;
+        this.category = category;
+        this.dateTime = dateTime;
+        this.description = description;
+        if (id >= COUNTER) COUNTER = id + 1;
+    }
+
+    public long getId() { return id; }
+    public String getName() { return name; }
+    public String getAddress() { return address; }
+    public EventCategory getCategory() { return category; }
+    public LocalDateTime getDateTime() { return dateTime; }
+    public String getDescription() { return description; }
+    public List<String> getParticipantsEmails() { return participantsEmails; }
+
+    public void addParticipant(String email) {
+        if (!participantsEmails.contains(email)) participantsEmails.add(email);
+    }
+
+    public void removeParticipant(String email) {
+        participantsEmails.remove(email);
+    }
+
+    public boolean isHappeningNow() {
+        LocalDateTime now = LocalDateTime.now();
+        // consider an event "happening" if now is between dateTime and dateTime + 3 hours
+        return !now.isBefore(dateTime) && now.isBefore(dateTime.plusHours(3));
+    }
+
+    public boolean isPast() {
+        return LocalDateTime.now().isAfter(dateTime.plusHours(3));
+    }
+
+    public String toDataLine() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(id).append("|")
+          .append(escape(name)).append("|")
+          .append(escape(address)).append("|")
+          .append(category).append("|")
+          .append(dateTime.format(Utils.DTF)).append("|")
+          .append(escape(description)).append("|");
+        if (!participantsEmails.isEmpty()) {
+            sb.append(String.join(";", participantsEmails));
+        }
+        return sb.toString();
+    }
+
+    public static String escape(String s) {
+        return s.replace("|", " ").replace("\n", " ");
+    }
+
+    @Override
+    public String toString() {
+        return "[" + id + "] " + name + " (" + category + ") - " + dateTime.format(Utils.DTF) + " - " + address + "\n" + description + "\nParticipants: " + participantsEmails.size();
+    }
+}
+
+// ---------- EventManager.java ----------
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Collectors;
+
+class EventManager {
+    private List<Event> events = new ArrayList<>();
+    private final String DATAFILE = "events.data";
+
+    public EventManager() {
+        load();
+    }
+
+    public void addEvent(Event e) { events.add(e); save(); }
+
+    public List<Event> listAll() {
+        return events.stream().sorted(Comparator.comparing(Event::getDateTime)).collect(Collectors.toList());
+    }
+
+    public Event findById(long id) {
+        return events.stream().filter(e -> e.getId() == id).findFirst().orElse(null);
+    }
+
+    public List<Event> listHappeningNow() {
+        return events.stream().filter(Event::isHappeningNow).sorted(Comparator.comparing(Event::getDateTime)).collect(Collectors.toList());
+    }
+
+    public List<Event> listPast() {
+        return events.stream().filter(Event::isPast).sorted(Comparator.comparing(Event::getDateTime)).collect(Collectors.toList());
+    }
+
+    public void save() {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(DATAFILE))) {
+            for (Event e : events) {
+                bw.write(e.toDataLine());
+                bw.newLine();
+            }
+        } catch (Exception ex) {
+            System.out.println("Erro ao salvar events.data: " + ex.getMessage());
+        }
+    }
+
+    public void load() {
+        File f = new File(DATAFILE);
+        if (!f.exists()) return;
+        try (BufferedReader br = new BufferedReader(new FileReader(f))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                if (line.trim().isEmpty()) continue;
+                String[] parts = line.split("\\|", -1);
+                if (parts.length < 7) continue;
+                long id = Long.parseLong(parts[0]);
+                String name = parts[1];
+                String address = parts[2];
+                EventCategory cat = EventCategory.valueOf(parts[3]);
+                LocalDateTime dt = LocalDateTime.parse(parts[4], Utils.DTF);
+                String desc = parts[5];
+                Event e = new Event(id, name, address, cat, dt, desc);
+                if (!parts[6].isEmpty()) {
+                    String[] p = parts[6].split(";");
+                    for (String pe : p) if (!pe.trim().isEmpty()) e.addParticipant(pe.trim());
+                }
+                events.add(e);
+            }
+        } catch (Exception ex) {
+            System.out.println("Erro ao carregar events.data: " + ex.getMessage());
+        }
+    }
+}
+
+// ---------- Main.java ----------
+import java.time.LocalDateTime;
+import java.util.List;
+
+public class Main {
+    private static EventManager em = new EventManager();
+    private static User currentUser = null;
+
+    public static void main(String[] args) {
+        System.out.println("=== Sistema de Eventos (Console) ===");
+        mainLoop();
+    }
+
+    private static void mainLoop() {
+        while (true) {
+            System.out.println();
+            System.out.println("Usuário: " + (currentUser == null ? "(nenhum)" : currentUser));
+            System.out.println("1) Cadastrar usuário");
+            System.out.println("2) Criar evento");
+            System.out.println("3) Listar eventos");
+            System.out.println("4) Listar eventos acontecendo agora");
+            System.out.println("5) Listar eventos passados");
+            System.out.println("6) Confirmar participação");
+            System.out.println("7) Meus eventos (confirmados)");
+            System.out.println("8) Cancelar participação");
+            System.out.println("9) Salvar e sair");
+            int opt = Utils.readInt("Escolha uma opção: ");
+            switch (opt) {
+                case 1: registerUser(); break;
+                case 2: createEvent(); break;
+                case 3: listEvents(); break;
+                case 4: listHappeningNow(); break;
+                case 5: listPast(); break;
+                case 6: participate(); break;
+                case 7: myEvents(); break;
+                case 8: cancelParticipation(); break;
+                case 9: em.save(); System.out.println("Salvo. Tchau!"); return;
+                default: System.out.println("Opção inválida");
+            }
+        }
+    }
+
+    private static void registerUser() {
+        System.out.println("--- Cadastro de usuário ---");
+        String name = Utils.readLine("Nome: ");
+        String email = Utils.readLine("Email: ");
+        String phone = Utils.readLine("Telefone: ");
+        currentUser = new User(name, email, phone);
+        System.out.println("Usuário cadastrado: " + currentUser);
+    }
+
+    private static void createEvent() {
+        if (currentUser == null) { System.out.println("Cadastre-se primeiro (opção 1)"); return; }
+        System.out.println("--- Criar evento ---");
+        String name = Utils.readLine("Nome do evento: ");
+        String address = Utils.readLine("Endereço: ");
+        System.out.println("Categorias:"); EventCategory.printCategories();
+        int c = Utils.readInt("Escolha categoria (número): ");
+        EventCategory cat = EventCategory.fromInt(c);
+        LocalDateTime dt = Utils.readDateTime("Data e hora");
+        String desc = Utils.readLine("Descrição: ");
+        Event e = new Event(name, address, cat, dt, desc);
+        em.addEvent(e);
+        System.out.println("Evento criado: " + e);
+    }
+
+    private static void listEvents() {
+        List<Event> list = em.listAll();
+        if (list.isEmpty()) { System.out.println("Nenhum evento cadastrado."); return; }
+        System.out.println("--- Eventos (ordenados por horário) ---");
+        for (Event e : list) {
+            System.out.println(e);
+            if (e.isHappeningNow()) System.out.println("--> Está ocorrendo agora!");
+            else if (e.isPast()) System.out.println("--> Já ocorreu");
+            System.out.println();
+        }
+    }
+
+    private static void listHappeningNow() {
+        List<Event> list = em.listHappeningNow();
+        if (list.isEmpty()) { System.out.println("Nenhum evento ocorrendo agora."); return; }
+        System.out.println("--- Eventos ocorrendo agora ---");
+        for (Event e : list) System.out.println(e + "\n");
+    }
+
+    private static void listPast() {
+        List<Event> list = em.listPast();
+        if (list.isEmpty()) { System.out.println("Nenhum evento passado."); return; }
+        System.out.println("--- Eventos já ocorridos ---");
+        for (Event e : list) System.out.println(e + "\n");
+    }
+
+    private static void participate() {
+        if (!checkUser()) return;
+        listEvents();
+        long id = Utils.readInt("Digite o id do evento para participar: ");
+        Event e = em.findById(id);
+        if (e == null) { System.out.println("Evento não encontrado"); return; }
+        e.addParticipant(currentUser.getEmail());
+        em.save();
+        System.out.println("Participação confirmada em: " + e.getName());
+    }
+
+    private static void myEvents() {
+        if (!checkUser()) return;
+        List<Event> list = em.listAll();
+        List<Event> mine = list.stream().filter(ev -> ev.getParticipantsEmails().contains(currentUser.getEmail())).collect(java.util.stream.Collectors.toList());
+        if (mine.isEmpty()) { System.out.println("Você não confirmou presença em nenhum evento."); return; }
+        System.out.println("--- Meus eventos ---");
+        for (Event e : mine) System.out.println(e + "\n");
+    }
+
+    private static void cancelParticipation() {
+        if (!checkUser()) return;
+        myEvents();
+        long id = Utils.readInt("Digite o id do evento para cancelar participação: ");
+        Event e = em.findById(id);
+        if (e == null) { System.out.println("Evento não encontrado"); return; }
+        e.removeParticipant(currentUser.getEmail());
+        em.save();
+        System.out.println("Participação cancelada em: " + e.getName());
+    }
+
+    private static boolean checkUser() {
+        if (currentUser == null) {
+            System.out.println("Nenhum usuário cadastrado. Cadastre-se (opção 1) antes.");
+            return false;
+        }
+        return true;
+    }
+}
+
+// ---------- Fim dos arquivos ----------
+
+
+Diagrama de classes (resumo):
+- Main
+  - usa EventManager e Utils
+- EventManager
+  - atributos: List<Event>, methods: load(), save(), addEvent(), listAll(), findById(), listHappeningNow(), listPast()
+- Event
+  - atributos: id, name, address, category, dateTime, description, participantsEmails
+  - métodos: addParticipant(), removeParticipant(), isHappeningNow(), isPast(), toDataLine()
+- User
+  - atributos: name, email, phone
+- EventCategory (enum)
+
+Observações / melhorias possíveis:
+- Salvar também usuários em arquivo separado
+- Melhor tratamento de concorrência e validações de entrada
+- Interface gráfica ou web
+
+
+Obrigado! Se quiser, eu posso:
+- Gerar um repositório Git contendo estes arquivos (copiando para um zip)
+- Adaptar para persistir usuários
+- Adicionar testes unitários
+
