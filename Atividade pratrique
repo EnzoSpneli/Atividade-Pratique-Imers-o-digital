@@ -386,30 +386,3 @@ public class Main {
         return true;
     }
 }
-
-// ---------- Fim dos arquivos ----------
-
-
-Diagrama de classes (resumo):
-- Main
-  - usa EventManager e Utils
-- EventManager
-  - atributos: List<Event>, methods: load(), save(), addEvent(), listAll(), findById(), listHappeningNow(), listPast()
-- Event
-  - atributos: id, name, address, category, dateTime, description, participantsEmails
-  - métodos: addParticipant(), removeParticipant(), isHappeningNow(), isPast(), toDataLine()
-- User
-  - atributos: name, email, phone
-- EventCategory (enum)
-
-Observações / melhorias possíveis:
-- Salvar também usuários em arquivo separado
-- Melhor tratamento de concorrência e validações de entrada
-- Interface gráfica ou web
-
-
-Obrigado! Se quiser, eu posso:
-- Gerar um repositório Git contendo estes arquivos (copiando para um zip)
-- Adaptar para persistir usuários
-- Adicionar testes unitários
-
